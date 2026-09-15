@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-15T14:52:54.607Z",
+  "generatedAt": "2026-09-15T15:04:57.986Z",
   "generatedAtFr": "15 septembre 2026",
   "app": {
     "commit": "8337c9c",
@@ -75,7 +75,7 @@
     },
     "costUsd": 1.181,
     "last7d": {
-      "local": 745,
+      "local": 737,
       "cloud": 76,
       "web": 141,
       "costUsd": 0.644
