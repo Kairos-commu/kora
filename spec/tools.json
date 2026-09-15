@@ -1,0 +1,518 @@
+{
+  "_note": "The 21 tool definitions of the reference instance, as sent to the model (Ollama tool format), with the risk tier of each. Descriptions are in French — the language the reference user speaks to Kora; the wording was tuned on a 12B model and is part of what works. Personal references replaced by « l'utilisateur ».",
+  "tools": [
+    {
+      "name": "web_search",
+      "group": "web",
+      "tier": "auto",
+      "description": "Recherche des informations factuelles vérifiables sur le web par mots-clés (actualités, données, personnes, événements). Ne retourne que des extraits courts — utilise read_url si l'utilisateur donne une URL précise à lire en entier.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string",
+            "description": "(OBLIGATOIRE) Requête de recherche concise"
+          }
+        },
+        "required": [
+          "query"
+        ]
+      }
+    },
+    {
+      "name": "read_url",
+      "group": "web",
+      "tier": "auto",
+      "description": "Lit le contenu réel d'une URL précise (page web donnée par l'utilisateur). Utilise ceci, jamais web_search, quand on te donne un lien exact à consulter.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "url": {
+            "type": "string",
+            "description": "(OBLIGATOIRE) URL complète à lire (https://...)"
+          }
+        },
+        "required": [
+          "url"
+        ]
+      }
+    },
+    {
+      "name": "list_directory",
+      "group": "pc_lecture",
+      "tier": "auto",
+      "description": "Liste le contenu d'un dossier sur le PC de l'utilisateur (lecture seule, aucune modification possible). Chemin absolu ou commençant par '~'. Sans argument, liste le dossier personnel (home).",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "Chemin du dossier à lister, ex: '~/Documents'. Optionnel."
+          }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "read_file",
+      "group": "pc_lecture",
+      "tier": "auto",
+      "description": "Lit le contenu texte d'un fichier précis sur le PC de l'utilisateur (lecture seule). Fichiers texte uniquement (code, config, notes...) — pas les binaires/images. Un chemin qui ressemble à des identifiants/secrets (.env, .ssh/, config.toml, credentials...) déclenche une confirmation de l'utilisateur avant lecture ; les valeurs qui ressemblent à des clés/tokens dans le contenu lu sont de toute façon masquées avant de te parvenir.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "(OBLIGATOIRE) Chemin complet du fichier à lire"
+          }
+        },
+        "required": [
+          "path"
+        ]
+      }
+    },
+    {
+      "name": "system_info",
+      "group": "pc_lecture",
+      "tier": "auto",
+      "description": "Donne des informations système du PC de l'utilisateur : espace disque, mémoire, plateforme, temps de fonctionnement. Lecture seule, aucun argument.",
+      "parameters": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      }
+    },
+    {
+      "name": "plan_cleanup",
+      "group": "pc_lecture",
+      "tier": "auto",
+      "description": "PREMIER TEMPS d'une suppression de fichiers — LECTURE SEULE, rien n'est déplacé. Calcule la liste des fichiers d'un dossier AUTORISÉ (Captures d'écran, Téléchargements, ~/Kora — la liste réelle t'est renvoyée si le dossier est refusé) qui correspondent au filtre, et renvoie un identifiant de plan avec le compte, la taille totale et des exemples. Tu ne choisis JAMAIS les fichiers un par un : le filtre sélectionne. Fichiers directement dans le dossier seulement — jamais un sous-dossier, jamais un fichier caché ou sensible. Ensuite, présente le plan à l'utilisateur puis appelle execute_cleanup(plan_id) pour l'exécuter (avec sa confirmation).",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "directory": {
+            "type": "string",
+            "description": "(OBLIGATOIRE) Dossier autorisé à nettoyer — un nom simple suffit : 'Captures d'écran', 'Téléchargements', 'Kora' (ou son chemin, ~ accepté)."
+          },
+          "older_than_days": {
+            "type": "string",
+            "description": "Ne garder que les fichiers plus vieux que N jours (ex: '30'). Absent = tous les âges."
+          },
+          "extensions": {
+            "type": "string",
+            "description": "Extensions à cibler, séparées par des virgules (ex: 'png, jpg'). Absent = toutes."
+          },
+          "name_contains": {
+            "type": "string",
+            "description": "Fragment que le nom du fichier doit contenir (ex: 'Capture'). Absent = tous."
+          }
+        },
+        "required": [
+          "directory"
+        ]
+      }
+    },
+    {
+      "name": "write_file",
+      "group": "pc_ecriture",
+      "tier": "irreversible",
+      "description": "Écrit un nouveau fichier texte — UNIQUEMENT dans ton dossier dédié sur le PC de l'utilisateur (~/Kora), jamais ailleurs (le nom de fichier ne doit pas contenir de chemin, juste un nom simple, ex. 'resume.md'). Refuse si un fichier du même nom existe déjà — ne remplace jamais un fichier existant, propose un autre nom ou demande à l'utilisateur de le supprimer d'abord. LIMITÉ à un texte COURT (~800 caractères max, ex. une note que l'utilisateur vient de te donner à sauvegarder telle quelle) — refusé automatiquement au-delà, PAS une suggestion : pour un résumé/une narration longue, utilise delegate_to_provider(provider=\"redaction\", save_as=\"...\") à la place, qui rédige ET enregistre en un seul appel sans risque de troncature. Cette action a un effet réel et déclenche systématiquement une confirmation de l'utilisateur avant d'être exécutée — fournis `reason` pour qu'il puisse décider vite.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "filename": {
+            "type": "string",
+            "description": "(OBLIGATOIRE) Nom du fichier à créer, sans chemin, ex: 'resume.md'."
+          },
+          "content": {
+            "type": "string",
+            "description": "(OBLIGATOIRE) Contenu texte complet du fichier."
+          },
+          "reason": {
+            "type": "string",
+            "description": "Justification courte (une phrase) affichée à l'utilisateur au moment de la confirmation."
+          }
+        },
+        "required": [
+          "filename",
+          "content",
+          "reason"
+        ]
+      }
+    },
+    {
+      "name": "update_file",
+      "group": "pc_ecriture",
+      "tier": "irreversible",
+      "description": "Remplace le contenu d'un fichier texte EXISTANT dans ton dossier dédié sur le PC de l'utilisateur (~/Kora) — jamais ailleurs (le nom de fichier ne doit pas contenir de chemin, juste un nom simple). Refuse si le fichier n'existe pas encore (utilise write_file pour en créer un). Réservé à un texte COURT que TU as toi-même sous la main dans cette conversation — refusé automatiquement au-delà d'environ 800 caractères, PAS une suggestion. Cette action a un effet réel et irréversible (le contenu précédent est perdu) et déclenche systématiquement une confirmation de l'utilisateur avant d'être exécutée — fournis `reason` pour qu'il puisse décider vite.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "filename": {
+            "type": "string",
+            "description": "(OBLIGATOIRE) Nom du fichier existant à mettre à jour, sans chemin, ex: 'notes-partagees.md'."
+          },
+          "content": {
+            "type": "string",
+            "description": "(OBLIGATOIRE) Nouveau contenu texte complet du fichier (remplace tout le contenu précédent)."
+          },
+          "reason": {
+            "type": "string",
+            "description": "Justification courte (une phrase) affichée à l'utilisateur au moment de la confirmation."
+          }
+        },
+        "required": [
+          "filename",
+          "content",
+          "reason"
+        ]
+      }
+    },
+    {
+      "name": "append_file",
+      "group": "pc_ecriture",
+      "tier": "irreversible",
+      "description": "Ajoute du texte à LA FIN d'un fichier EXISTANT dans ton dossier dédié (~/Kora), SANS toucher au contenu déjà présent — PRÉFÈRE CET OUTIL à update_file dès que la demande est d'AJOUTER une entrée/idée/ligne à un fichier qui existe déjà (ex. 'ajoute ça à mes notes') : tu n'as besoin de fournir QUE ce qui s'ajoute, jamais de relire le fichier ni de reproduire son contenu existant. Refuse si le fichier n'existe pas encore (utilise write_file pour en créer un). N'utilise update_file QUE si l'utilisateur demande explicitement de réorganiser/réécrire le fichier entier. Réservé à un texte COURT — refusé automatiquement au-delà d'environ 800 caractères. Cette action a un effet réel et irréversible et déclenche systématiquement une confirmation de l'utilisateur avant d'être exécutée — fournis `reason` pour qu'il puisse décider vite.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "filename": {
+            "type": "string",
+            "description": "(OBLIGATOIRE) Nom du fichier existant auquel ajouter du texte, sans chemin, ex: 'notes-partagees.md'."
+          },
+          "content": {
+            "type": "string",
+            "description": "(OBLIGATOIRE) UNIQUEMENT le texte à ajouter (ex: une ligne '- nouvelle idée : ...') — jamais le fichier entier."
+          },
+          "reason": {
+            "type": "string",
+            "description": "Justification courte (une phrase) affichée à l'utilisateur au moment de la confirmation."
+          }
+        },
+        "required": [
+          "filename",
+          "content",
+          "reason"
+        ]
+      }
+    },
+    {
+      "name": "execute_cleanup",
+      "group": "pc_ecriture",
+      "tier": "irreversible",
+      "description": "SECOND TEMPS — met à la CORBEILLE (jamais effacés définitivement, récupérables) les fichiers d'un plan obtenu par plan_cleanup dans ce même échange. N'exécute que ce plan précis : un fichier modifié ou disparu depuis le plan est ignoré. Action à effet réel : déclenche systématiquement une confirmation de l'utilisateur, qui voit le résumé du plan (compte, taille, exemples) avant de décider. Ne prétends JAMAIS avoir supprimé quoi que ce soit sans le résultat réel de cet outil. Fournis `reason` en une phrase.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "plan_id": {
+            "type": "string",
+            "description": "Facultatif : l'identifiant renvoyé par plan_cleanup. Absent ou inconnu, c'est le DERNIER plan préparé dans cette conversation qui est exécuté — inutile de le deviner."
+          },
+          "reason": {
+            "type": "string",
+            "description": "Justification courte (une phrase) affichée à l'utilisateur au moment de la confirmation."
+          }
+        },
+        "required": [
+          "reason"
+        ]
+      }
+    },
+    {
+      "name": "open_url",
+      "group": "pc_action",
+      "tier": "confirm",
+      "description": "Ouvre une URL dans le navigateur par défaut de l'utilisateur (ex: lancer un site web, un lecteur en ligne). Ne fonctionne que pour http(s) — pas un fichier local (utilise open_path pour ça). Si l'utilisateur nomme un artiste/titre/recherche en plus d'un site (\"lance tel artiste sur Deezer\", \"cherche X sur YouTube\"), construis une URL DE RECHERCHE sur ce site (ex: https://www.deezer.com/search/<requête>, https://www.youtube.com/results?search_query=<requête>) plutôt que d'ouvrir seulement la page d'accueil — ça ne suffit pas à lancer la lecture (le navigateur bloque l'autoplay au premier chargement d'une page), dis-le honnêtement plutôt que de prétendre que la musique se lance toute seule. Ne connais AUCUNE playlist ou favori personnel de l'utilisateur (\"ma playlist\", \"ma liste du matin\") SAUF si son nom exact figure dans les raccourcis connus injectés dans ton prompt (le cas échéant, cf. prompt.ts::withMediaShortcuts) — utilise alors l'URL fournie telle quelle, jamais une autre. Sans raccourci correspondant et sans URL/nom concret donné par l'utilisateur, dis-le plutôt que d'inventer une recherche approximative. Cette action a un effet réel et déclenche systématiquement une confirmation de l'utilisateur avant d'être exécutée — fournis `reason` pour qu'il puisse décider vite.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "url": {
+            "type": "string",
+            "description": "(OBLIGATOIRE) URL complète à ouvrir (https://...)"
+          },
+          "reason": {
+            "type": "string",
+            "description": "Justification courte (une phrase) affichée à l'utilisateur au moment de la confirmation."
+          }
+        },
+        "required": [
+          "url",
+          "reason"
+        ]
+      }
+    },
+    {
+      "name": "open_path",
+      "group": "pc_action",
+      "tier": "confirm",
+      "description": "Ouvre un fichier ou dossier local avec l'application par défaut du système de l'utilisateur (ex: ouvrir un document, un dossier dans l'explorateur de fichiers). Ne crée, ne modifie et ne supprime rien — mais sur certains fichiers (un exécutable, un .desktop), \"ouvrir avec l'application par défaut\" peut vouloir dire LANCER ce fichier, pas juste l'afficher. Cette action a un effet réel et déclenche systématiquement une confirmation de l'utilisateur avant d'être exécutée — fournis `reason` pour qu'il puisse décider vite.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "(OBLIGATOIRE) Chemin du fichier ou dossier à ouvrir, ex: '~/Documents/rapport.pdf'"
+          },
+          "reason": {
+            "type": "string",
+            "description": "Justification courte (une phrase) affichée à l'utilisateur au moment de la confirmation."
+          }
+        },
+        "required": [
+          "path",
+          "reason"
+        ]
+      }
+    },
+    {
+      "name": "launch_app",
+      "group": "pc_action",
+      "tier": "confirm",
+      "description": "Lance une application installée sur le PC de l'utilisateur, désignée par son nom (ex: \"Rhythmbox\", \"VLC\", \"GIMP\") — PAS un site web (utilise open_url) ni un fichier/dossier (utilise open_path). Ne fonctionne QUE pour les noms déjà connus de l'utilisateur (table app-shortcuts.json) — si l'appli demandée n'y figure pas, dis-le honnêtement à l'utilisateur plutôt que de deviner un chemin ou une commande. N'invente JAMAIS de chemin de fichier pour lancer une application. Cette action a un effet réel et déclenche systématiquement une confirmation de l'utilisateur avant d'être exécutée — fournis `reason` pour qu'il puisse décider vite.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "(OBLIGATOIRE) Nom de l'application à lancer, tel que demandé par l'utilisateur."
+          },
+          "reason": {
+            "type": "string",
+            "description": "Justification courte (une phrase) affichée à l'utilisateur au moment de la confirmation."
+          }
+        },
+        "required": [
+          "name",
+          "reason"
+        ]
+      }
+    },
+    {
+      "name": "control_media",
+      "group": "pc_action",
+      "tier": "confirm",
+      "description": "Contrôle la lecture audio/vidéo en cours sur le PC de l'utilisateur (lecteur actif, quel qu'il soit — Spotify, VLC, un onglet de navigateur...). Actions et déclencheurs typiques : play_pause = \"pause\"/\"reprends\"/\"relance\" ; next_track = \"piste suivante\"/\"chanson suivante\"/\"change de musique\"/\"change de son\" ; previous_track = \"piste précédente\"/\"reviens en arrière\" ; volume_up = \"monte le son\"/\"plus fort\" ; volume_down = \"baisse le son\"/\"moins fort\" ; mute_media = \"coupe le son\"/\"coupe la musique\"/\"mute\" ; unmute_media = \"remets le son\"/\"remets la musique\"/\"démute\". mute_media/unmute_media agissent UNIQUEMENT sur la musique/vidéo/radio détectée en cours de lecture — jamais sur le son du PC dans son ensemble, ta propre voix reste toujours audible après l'un ou l'autre. Ne choisit ni piste ni niveau de volume précis. Cette action a un effet réel et déclenche systématiquement une confirmation de l'utilisateur avant d'être exécutée — fournis `reason` pour qu'il puisse décider vite.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string",
+            "enum": [
+              "play_pause",
+              "next_track",
+              "previous_track",
+              "volume_up",
+              "volume_down",
+              "mute_media",
+              "unmute_media"
+            ],
+            "description": "(OBLIGATOIRE) Action à déclencher — UNE de ces valeurs exactes, jamais autre chose : play_pause, next_track, previous_track, volume_up, volume_down, mute_media, unmute_media."
+          },
+          "reason": {
+            "type": "string",
+            "description": "Justification courte (une phrase) affichée à l'utilisateur au moment de la confirmation."
+          }
+        },
+        "required": [
+          "action",
+          "reason"
+        ]
+      }
+    },
+    {
+      "name": "open_site_search",
+      "group": "pc_action",
+      "tier": "confirm",
+      "description": "Ouvre une recherche dans le navigateur par défaut de l'utilisateur sur un site connu (ex: \"images\" pour une recherche visuelle, \"youtube\" pour une vidéo, \"deezer\" pour une musique, \"web\" pour une recherche générale) — jamais pour une information que TU dois lire/synthétiser toi-même (utilise web_search/read_url pour ça, cf. section ACCÈS WEB). Utilise ce site précisément pour ce que l'utilisateur veut VOIR à l'écran (images, vidéo à lancer, page de résultats à parcourir), pas pour construire ta propre réponse. Fournis uniquement des MOTS de recherche dans `query` — jamais une URL, le site se charge de la construire. Si le site demandé n'est pas dans la liste connue, dis-le honnêtement plutôt que d'utiliser open_url avec une URL devinée. Cette action a un effet réel et déclenche systématiquement une confirmation de l'utilisateur avant d'être exécutée — fournis `reason` pour qu'il puisse décider vite.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "site": {
+            "type": "string",
+            "description": "(OBLIGATOIRE) Site de recherche connu, ex: \"images\", \"youtube\", \"deezer\", \"web\"."
+          },
+          "query": {
+            "type": "string",
+            "description": "(OBLIGATOIRE) Mots de recherche uniquement, jamais une URL."
+          },
+          "reason": {
+            "type": "string",
+            "description": "Justification courte (une phrase) affichée à l'utilisateur au moment de la confirmation."
+          }
+        },
+        "required": [
+          "site",
+          "query",
+          "reason"
+        ]
+      }
+    },
+    {
+      "name": "play_top_result",
+      "group": "pc_action",
+      "tier": "confirm",
+      "description": "Cherche un titre/une vidéo sur \"deezer\" ou \"youtube\" et ouvre DIRECTEMENT le premier résultat trouvé dans le navigateur par défaut de l'utilisateur — pas une page de résultats à parcourir (utilise open_site_search pour ça), l'objectif ici est que la lecture démarre. Sur YouTube la vidéo démarre généralement automatiquement à l'ouverture. Sur Deezer, l'ouverture de la page du titre NE GARANTIT PAS le démarrage automatique de la lecture (dépend d'une session Deezer déjà connectée dans le navigateur de l'utilisateur) — dis-le honnêtement si tu n'as aucune preuve que la musique a effectivement démarré, ne prétends jamais l'inverse. Fournis uniquement des mots de recherche dans `query`, jamais une URL. Cette action a un effet réel et déclenche systématiquement une confirmation de l'utilisateur avant d'être exécutée — fournis `reason` pour qu'il puisse décider vite.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "site": {
+            "type": "string",
+            "enum": [
+              "deezer",
+              "youtube"
+            ],
+            "description": "(OBLIGATOIRE) Site cible — UNE de ces valeurs exactes, jamais autre chose : deezer, youtube."
+          },
+          "query": {
+            "type": "string",
+            "description": "(OBLIGATOIRE) Mots de recherche uniquement (titre, artiste...), jamais une URL."
+          },
+          "reason": {
+            "type": "string",
+            "description": "Justification courte (une phrase) affichée à l'utilisateur au moment de la confirmation."
+          }
+        },
+        "required": [
+          "site",
+          "query",
+          "reason"
+        ]
+      }
+    },
+    {
+      "name": "delegate_to_provider",
+      "group": "communication",
+      "tier": "auto",
+      "description": "Délègue une tâche plutôt que d'y répondre toi-même. provider=\"claude\" : architecture, raisonnement théorique approfondi, requête ambiguë ou critique, analyser une image/un PDF (cf. attach_path), ou si tu doutes de ta propre capacité — le résultat est la vraie réponse de Claude, à réécrire ensuite avec ta propre voix, jamais un copier-coller brut (Claude ne sait pas qu'il te parle à TOI). provider=\"redaction\" : résumé ou narration longue — le texte retourné EST déjà le livrable final, transmets-le proche du verbatim (pas de réécriture du corps). provider=\"chatgpt\" : l'utilisateur demande ChatGPT nommément, ou veut explicitement un second avis à comparer à celui de Claude sur la même question. provider=\"deepseek\" : question de programmation/debug technique où l'utilisateur demande DeepSeek nommément, ou dont raisonner sur du code est le vrai cœur de la tâche. Pour chatgpt/deepseek comme pour claude, réécris toujours le résultat avec ta propre voix — jamais un copier-coller brut. `save_as` (optionnel, uniquement avec provider=\"redaction\") : nom de fichier si l'utilisateur veut que ce texte soit enregistré — l'application écrit le fichier directement à partir du texte rédigé, n'appelle JAMAIS write_file en plus pour ce même texte ensuite (le retaper toi-même risque de le tronquer/déformer).",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "provider": {
+            "type": "string",
+            "enum": [
+              "claude",
+              "redaction",
+              "chatgpt",
+              "deepseek"
+            ],
+            "description": "(OBLIGATOIRE) Le modèle à qui déléguer — UNE de ces valeurs exactes, jamais autre chose : 'claude', 'redaction', 'chatgpt', 'deepseek'."
+          },
+          "task": {
+            "type": "string",
+            "description": "(OBLIGATOIRE) Ce que le provider doit FAIRE, en une consigne claire (ex. « Donne ton avis critique sur ce résumé », « Complète ce texte avec ta propre vision »). L'application joint automatiquement les derniers échanges de la conversation — le message de l'utilisateur et ce que tu as affiché — à ce que tu envoies : tu n'as PAS à recopier un texte déjà présent dans la conversation. Si le contenu n'est PAS dans la conversation, mets-le ici. Un appel sans `task` est REJETÉ : ne tente jamais delegate_to_provider avec le seul `provider`."
+          },
+          "save_as": {
+            "type": "string",
+            "description": "Nom de fichier (dans ~/Kora) pour enregistrer le texte rédigé — UNIQUEMENT avec provider=\"redaction\", ignoré sinon. Omets ce champ si l'utilisateur ne veut pas que ce soit enregistré."
+          },
+          "attach_path": {
+            "type": "string",
+            "description": "Chemin d'un fichier image (png/jpg/jpeg/webp/gif) ou PDF (y compris scanné, sans couche texte) à joindre à la tâche — UNIQUEMENT avec provider=\"claude\" (seul provider ici avec vision), refusé sinon. Déclenche une confirmation de l'utilisateur avant l'envoi (le fichier quitte réellement le PC vers l'API Claude)."
+          }
+        },
+        "required": [
+          "provider",
+          "task"
+        ]
+      }
+    },
+    {
+      "name": "write_memory",
+      "group": "communication",
+      "tier": "auto",
+      "description": "Écris une information dans TA mémoire durable sur l'utilisateur — UNIQUEMENT si l'utilisateur te le demande littéralement (\"écris ça dans ta mémoire\") ou fait une déclaration forte et explicite (\"souviens-toi de ça\", \"intègre bien ce point\", \"c'est essentiel\"). N'appelle JAMAIS cet outil de ta propre initiative pour une simple remarque intéressante — un mécanisme séparé, automatique, reste le filet de sécurité pour ça.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "section": {
+            "type": "string",
+            "enum": [
+              "arbitrage",
+              "patterns",
+              "fils_ouverts",
+              "anomalies"
+            ],
+            "description": "'arbitrage' : décision/principe établi entre vous (y compris une règle relationnelle posée par l'utilisateur). 'patterns' : un pattern que TOI as observé à plusieurs reprises — jamais une annonce ponctuelle de l'utilisateur sur lui-même. 'fils_ouverts' : question ou point en suspens, à reprendre plus tard. 'anomalies' : un comportement technique inattendu que TU as toi-même rencontré (un outil qui échoue de façon répétée, une incohérence dans tes propres résultats) — jamais un simple compte-rendu d'action routinière réussie, ça n'a rien d'une anomalie."
+          },
+          "entry": {
+            "type": "string",
+            "description": "(OBLIGATOIRE) — et SEUL argument obligatoire. La phrase à retenir, en texte brut, factuelle et neutre, 180 caractères maximum. Écris une VRAIE phrase reprenant ce que l'utilisateur vient de dire (\"l'utilisateur ne veut pas être vouvoyé\"), jamais un mot-clé ni une paire clé/valeur — cet outil n'est pas un stockage clé/valeur."
+          }
+        },
+        "required": [
+          "entry"
+        ]
+      }
+    },
+    {
+      "name": "update_memory",
+      "group": "communication",
+      "tier": "auto",
+      "description": "Corrige une entrée EXISTANTE de ta mémoire durable sur l'utilisateur — quand une nouvelle information contredit ou périme ce que tu avais noté avant, jamais pour une simple nuance. UNIQUEMENT sur demande littérale (\"corrige ta mémoire...\") ou déclaration forte explicite, même règle que write_memory. `entry_id` doit être copié EXACTEMENT depuis le format \"[id:...]\" visible dans ta mémoire condensée — jamais inventé ; si tu ne vois pas l'id de l'entrée à corriger, utilise write_memory pour une nouvelle entrée à la place.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "section": {
+            "type": "string",
+            "enum": [
+              "arbitrage",
+              "patterns",
+              "fils_ouverts",
+              "anomalies"
+            ],
+            "description": "(OBLIGATOIRE) Section contenant l'entrée à corriger — UNE de ces valeurs exactes, jamais autre chose : arbitrage, patterns, fils_ouverts, anomalies. Doit correspondre à la section réelle de cette entrée."
+          },
+          "entry_id": {
+            "type": "string",
+            "description": "(OBLIGATOIRE) Id exact (sans les crochets ni le préfixe \"id:\") de l'entrée à remplacer."
+          },
+          "new_entry": {
+            "type": "string",
+            "description": "(OBLIGATOIRE) Nouveau texte, factuel et neutre, 180 caractères maximum."
+          }
+        },
+        "required": [
+          "section",
+          "entry_id",
+          "new_entry"
+        ]
+      }
+    },
+    {
+      "name": "search_past_conversations",
+      "group": "communication",
+      "tier": "auto",
+      "description": "Cherche dans tes AUTRES conversations avec l'utilisateur — jamais celle-ci, qui est déjà entièrement dans les messages ci-dessus. Utilise cet outil quand l'utilisateur fait référence à un échange antérieur (\"comme on disait l'autre jour\", \"tu te souviens de...\", \"on avait déjà parlé de...\") ET que tu ne trouves pas ce contexte dans les messages ci-dessus — vérifie-les TOUJOURS en premier. Ne confonds jamais avec write_memory/read_url : ceci retrouve une CONVERSATION passée, pas un fait mémorisé ni une page web. Renvoie les fils les plus pertinents avec un extrait — pas le fil entier.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string",
+            "description": "(OBLIGATOIRE) Mots-clés décrivant ce dont l'utilisateur parle (sujet, nom, décision...)."
+          }
+        },
+        "required": [
+          "query"
+        ]
+      }
+    },
+    {
+      "name": "recall_provider_answers",
+      "group": "communication",
+      "tier": "auto",
+      "description": "Retrouve le TEXTE INTÉGRAL d'un avis qu'un autre modèle (Claude, ChatGPT, DeepSeek) t'a donné lors d'un échange précédent. Tu ne conserves de ces avis que ce que tu en as toi-même recopié dans ta réponse : si l'utilisateur te demande de recroiser, comparer ou compléter un avis que tu as reçu il y a plusieurs tours, utilise cet outil au lieu de lui redemander ce qui a été dit. Les avis du tour en cours et des tout derniers tours sont déjà dans les messages ci-dessus — vérifie-les TOUJOURS en premier. Ne confond pas avec search_past_conversations, qui retrouve un échange avec FLORENT, pas la réponse d'un autre modèle.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string",
+            "description": "(OBLIGATOIRE) Mots-clés du sujet de l'avis recherché (thème, nom du provider, termes du texte évalué)."
+          }
+        },
+        "required": [
+          "query"
+        ]
+      }
+    }
+  ]
+}
